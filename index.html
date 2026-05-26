@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مطور الـ PDF الذكي وتوليد الصور من النصوص</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1a365d;
+            --secondary-color: #c97d24;
+            --bg-color: #faf8f5;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0; padding: 0; display: flex;
+            background-color: #e2e8f0; height: 100vh; overflow: hidden;
+        }
+
+        /* اللوحة الجانبية للتعديل */
+        .sidebar {
+            width: 35%; background: #ffffff; padding: 25px;
+            box-shadow: 2px 0 15px rgba(0,0,0,0.1); overflow-y: auto; z-index: 10;
+        }
+
+        /* منطقة عرض المستند المعاين */
+        .preview-container {
+            width: 65%; padding: 30px; overflow-y: auto;
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        /* ورقة الـ PDF الحقيقية */
+        .pdf-page {
+            width: 210mm; min-height: 297mm; background: var(--bg-color);
+            padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            box-sizing: border-box; position: relative;
+        }
+
+        /* عناصر التحكم Inputs */
+        .form-group { margin-bottom: 18px; }
+        label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: #2d3748; }
+        input, textarea {
+            width: 100%; padding: 11px; border: 1px solid #cbd5e0;
+            border-radius: 6px; box-sizing: border-box; font-size: 14px;
+        }
+        
+        .btn {
+            color: white; border: none; padding: 12px 20px; border-radius: 6px;
+            cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; font-size: 16px;
+            transition: 0.2s;
+        }
+        .btn-ai { background: #805ad5; } 
+        .btn-ai:hover { background: #6b46c1; }
+        .btn-download { background: #38a169; }
+        .btn-download:hover { background: #2f855a; }
+
+        /* --- تنسيقات تصميم الـ PDF الاحترافي --- */
+        .pdf-header {
+            background-color: var(--primary-color); color: white;
+            margin: -25px -25px 20px -25px; padding: 35px 25px;
+            border-bottom: 5px solid var(--secondary-color);
+        }
+        .pdf-header h1 { margin: 0; font-size: 26px; }
+        .pdf-header p { margin: 6px 0 0 0; font-size: 14px; opacity: 0.9; }
+
+        .pdf-section-title {
+            font-size: 18px; color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 5px; margin: 25px 0 15px 0; font-weight: bold;
+        }
+
+        .grid-2 { display: flex; gap: 15px; margin-bottom: 15px; }
+        .card {
+            background: white; border-right: 5px solid var(--secondary-color);
+            padding: 15px; border-radius: 0 6px 6px 0; flex: 1;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+        }
+        .card h4 { margin: 0 0 8px 0; color: var(--primary-color); font-size: 16px; }
+        .card p { margin: 0; font-size: 13px; color: #4a5568; line-height: 1.6; }
+
+        /* حاويات الصور الذكية المخصصة للـ PDF */
+        .ai-image-container {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;
+        }
+        .ai-img-box {
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; text-align: center;
+        }
+        .ai-img-box img {
+            width: 100%; height: 160px; object-fit: cover; border-radius: 4px;
+        }
+        .ai-img-box span { font-size: 11px; color: #718096; display: block; margin-top: 5px; }
+
+        .loading-status {
+            font-size: 13px; color: #805ad5; font-weight: bold; display: none;
+            background: #f3e8ff; padding: 10px; border-radius: 6px; border: 1px solid #d6bcfa;
+            margin-top: 10px; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2 style="color: var(--primary-color);">لوحة التحكم الذكية</h2>
+        <p style="font-size: 13px; color: #718096; margin-top: -5px;">اكتب محتوى الـ PDF، وسيقوم النظام الذكي بقراءته وصنع صور مطابقة للقصة أو النص تلقائياً.</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;">
+
+        <div class="form-group">
+            <label>عنوان المستند الرئيسي:</label>
+            <input type="text" id="input-title" value="WUTHERING HEIGHTS – STUDY GUIDE" oninput="updatePreview()">
+        </div>
+        <div class="form-group">
+            <label>الوصف الفرعي:</label>
+            <input type="text" id="input-subtitle" value="ملخص أكاديمي تفصيلي مدعوم بالذكاء الاصطناعي البصري" oninput="updatePreview()">
+        </div>
+
+        <div style="background: #f7fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
+            <span style="font-weight: bold; font-size: 14px; color: var(--primary-color);">محتوى البطاقة الأولى (يمين):</span>
+            <div class="form-group" style="margin-top: 8px;">
+                <input type="text" id="card1-title" value="The Stormy Moors" oninput="updatePreview()">
+                <textarea id="card1-text" rows="3" style="margin-top: 5px;" oninput="updatePreview()">A dark, windy and stormy landscape in Yorkshire with a lonely old castle on top of the hill, gothic oil painting style.</textarea>
+            </div>
+        </div>
+
+        <div style="background: #f7fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
+            <span style="font-weight: bold; font-size: 14px; color: var(--primary-color);">محتوى البطاقة الثانية (يسار):</span>
+            <div class="form-group" style="margin-top: 8px;">
+                <input type="text" id="card2-title" value="Heathcliff character" oninput="updatePreview()">
+                <textarea id="card2-text" rows="3" style="margin-top: 5px;" oninput="updatePreview()">A vintage portrait of a mysterious, dark-haired angry man standing outside in a foggy cold day, cinematic lighting.</textarea>
+            </div>
+        </div>
+
+        <button class="btn btn-ai" onclick="generateImagesFromText()">🤖 توليد صور مخصصة من نص البطاقات</button>
+        <div class="loading-status" id="ai-status">جاري تحليل النصوص واستدعاء محرك الذكاء الاصطناعي لتوليد الصور...</div>
+        
+        <button class="btn btn-download" style="margin-top: 20px;" onclick="downloadPDF()">📥 تحميل ملف PDF الجاهز بالصور</button>
+    </div>
+
+    <div class="preview-container">
+        <div class="pdf-page" id="pdf-content">
+            
+            <div class="pdf-header">
+                <h1 id="view-title">WUTHERING HEIGHTS – STUDY GUIDE</h1>
+                <p id="view-subtitle">ملخص أكاديمي تفصيلي مدعوم بالذكاء الاصطناعي البصري</p>
+            </div>
+
+            <div class="pdf-section-title">1. عناصر الدراسة والتحليل (Study Elements)</div>
+            <div class="grid-2">
+                <div class="card">
+                    <h4 id="view-card1-title">The Stormy Moors</h4>
+                    <p id="view-card1-text">A dark, windy and stormy landscape in Yorkshire with a lonely old castle on top of the hill, gothic oil painting style.</p>
+                </div>
+                <div class="card">
+                    <h4 id="view-card2-title">Heathcliff character</h4>
+                    <p id="view-card2-text">A vintage portrait of a mysterious, dark-haired angry man standing outside in a foggy cold day, cinematic lighting.</p>
+                </div>
+            </div>
+
+            <div class="pdf-section-title" id="photo-section-title" style="display: none;">2. الصور المستوحاة من نصوص البطاقات (AI Generated Imagery)</div>
+            <div class="ai-image-container">
+                <div class="ai-img-box" id="box-img1" style="display: none;">
+                    <img id="ai-img1" src="" alt="Image 1">
+                    <span id="label-img1">صورة البطاقة 1</span>
+                </div>
+                <div class="ai-img-box" id="box-img2" style="display: none;">
+                    <img id="ai-img2" src="" alt="Image 2">
+                    <span id="label-img2">صورة البطاقة 2</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // دالة لمزامنة النصوص المكتوبة مباشرة مع المعاينة الحية
+        function updatePreview() {
+            document.getElementById('view-title').innerText = document.getElementById('input-title').value;
+            document.getElementById('view-subtitle').innerText = document.getElementById('input-subtitle').value;
+            
+            document.getElementById('view-card1-title').innerText = document.getElementById('card1-title').value;
+            document.getElementById('view-card1-text').innerText = document.getElementById('card1-text').value;
+            
+            document.getElementById('view-card2-title').innerText = document.getElementById('card2-title').value;
+            document.getElementById('view-card2-text').innerText = document.getElementById('card2-text').value;
+        }
+
+        // الذكاء الاصطناعي: يقرأ النصوص المكتوبة بداخل البطاقات ويولد صوراً مطابقة لها
+        function generateImagesFromText() {
+            const statusDiv = document.getElementById('ai-status');
+            statusDiv.style.display = "block";
+
+            // قراءة النصوص الحالية من البطاقات
+            const text1 = document.getElementById('card1-text').value;
+            const text2 = document.getElementById('card2-text').value;
+
+            const title1 = document.getElementById('card1-title').value;
+            const title2 = document.getElementById('card2-title').value;
+
+            // روابط توليد الصور عبر الذكاء الاصطناعي المجاني والسريع (يُفضل كتابة النص بالإنجليزية لنتائج مبهرة)
+            const aiUrl1 = `https://image.pollinations.ai/p/${encodeURIComponent(text1)}?width=600&height=400&nologo=true&seed=${Math.floor(Math.random() * 500)}`;
+            const aiUrl2 = `https://image.pollinations.ai/p/${encodeURIComponent(text2)}?width=600&height=400&nologo=true&seed=${Math.floor(Math.random() * 500)}`;
+
+            let loadedCount = 0;
+
+            // تحميل الصورة الأولى في المستند
+            const img1 = new Image();
+            img1.src = aiUrl1;
+            img1.onload = function() {
+                document.getElementById('ai-img1').src = aiUrl1;
+                document.getElementById('box-img1').style.display = "block";
+                document.getElementById('label-img1').innerText = `مستوحاة من: ${title1}`;
+                checkCompletion();
+            };
+
+            // تحميل الصورة الثانية في المستند
+            const img2 = new Image();
+            img2.src = aiUrl2;
+            img2.onload = function() {
+                document.getElementById('ai-img2').src = aiUrl2;
+                document.getElementById('box-img2').style.display = "block";
+                document.getElementById('label-img2').innerText = `مستوحاة من: ${title2}`;
+                checkCompletion();
+            };
+
+            function checkCompletion() {
+                loadedCount++;
+                if(loadedCount === 2) {
+                    document.getElementById('photo-section-title').style.display = "block";
+                    statusDiv.innerHTML = "✅ تم توليد الصور بنجاح ودمجها بداخل الـ PDF الفعلي!";
+                    setTimeout(() => { statusDiv.style.display = "none"; }, 4000);
+                }
+            }
+        }
+
+        // دالة تحميل وحفظ ملف الـ PDF بألوانه وتنسيقاته الكاملة
+        function downloadPDF() {
+            const element = document.getElementById('pdf-content');
+            const documentName = document.getElementById('input-title').value || 'AI_Study_Guide';
+            
+            const opt = {
+                margin:       0,
+                filename:     `${documentName}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true }, // استخدام CORS لضمان سحب صور الذكاء الاصطناعي بدقة داخل الملف
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save();
+        }
+    </script>
+</body>
+</html>
